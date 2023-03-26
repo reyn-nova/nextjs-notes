@@ -1,16 +1,36 @@
 import { useState } from "react";
 
+import { PrismaClient } from "@prisma/client";
+
 import IconButton from "@/components/icon_button";
 import NoteItem from "@/components/note_item";
+import { useRouter } from "next/router";
 
-type NoteItemType = {
-  id: number;
-  value: string;
+export async function getStaticProps() {
+  const prisma = new PrismaClient();
+  const notes = await prisma.note.findMany();
+
+  return {
+    props: { notes },
+  };
+}
+
+type HomeType = {
+  notes: {
+    id: number;
+    value: string;
+  }[];
 };
 
-const Home = () => {
-  const [modalState, setModalState] = useState("");
-  const [noteItems, setNoteItems] = useState<NoteItemType[]>([]);
+const Home = ({ notes }: HomeType) => {
+  const [modalInput, setModalInput] = useState("");
+
+  // null for not showing modal
+  // -1 for showing add new note modal
+  // other number for showing edit note modal
+  const [openedModalId, setOpenedModalId] = useState<number | null>(null);
+
+  const router = useRouter();
 
   return (
     <div
@@ -41,19 +61,29 @@ const Home = () => {
           <IconButton
             variant="add"
             backgroundColor="green"
-            onClick={() => setModalState("Add")}
+            onClick={() => {
+              setModalInput("");
+              setOpenedModalId(-1);
+            }}
           />
         </div>
 
-        {noteItems.map(({ id, value }) => {
-          <NoteItem
-            key={id}
-            onEdit={() => setModalState("Edit")}
-            value={value}
-          ></NoteItem>;
-        })}
+        {notes
+          .sort((a, b) => a.id - b.id)
+          .map(({ id, value }) => {
+            return (
+              <NoteItem
+                key={id}
+                onEdit={() => {
+                  setModalInput(value);
+                  setOpenedModalId(id);
+                }}
+                value={value}
+              ></NoteItem>
+            );
+          })}
 
-        {modalState !== "" ? (
+        {openedModalId !== null ? (
           <div
             style={{
               position: "absolute",
@@ -82,30 +112,47 @@ const Home = () => {
                   justifyContent: "space-between",
                 }}
               >
-                <h1>{modalState} Note</h1>
+                <h1>{openedModalId === -1 ? "Add" : "Edit"} Note</h1>
 
                 <div
                   style={{
                     display: "flex",
                   }}
                 >
-                  {modalState === "Edit" ? (
+                  {openedModalId !== -1 ? (
                     <IconButton
                       variant="delete"
                       backgroundColor="red"
                       margin="0px 10px 0px 0px"
+                      onClick={async () => {
+                        await fetch("api/delete", {
+                          body: JSON.stringify({
+                            id: openedModalId,
+                          }),
+                          headers: {
+                            "Content-Type": "application/json",
+                          },
+                          method: "POST",
+                        }).then(() => {
+                          router.replace(router.asPath);
+                        });
+
+                        setOpenedModalId(null);
+                      }}
                     />
                   ) : null}
 
                   <IconButton
                     variant="close"
-                    onClick={() => setModalState("")}
+                    onClick={() => setOpenedModalId(null)}
                   />
                 </div>
               </div>
 
               <input
+                value={modalInput}
                 placeholder="Type your note..."
+                onChange={(event) => setModalInput(event.target.value)}
                 style={{
                   color: "black",
                   padding: 10,
@@ -119,7 +166,36 @@ const Home = () => {
               <IconButton
                 variant="done"
                 backgroundColor="green"
-                onClick={() => setModalState("")}
+                onClick={async () => {
+                  if (openedModalId === -1) {
+                    await fetch("api/create", {
+                      body: JSON.stringify({
+                        value: modalInput,
+                      }),
+                      headers: {
+                        "Content-Type": "application/json",
+                      },
+                      method: "POST",
+                    }).then(() => {
+                      router.replace(router.asPath);
+                    });
+                  } else {
+                    await fetch("api/edit", {
+                      body: JSON.stringify({
+                        id: openedModalId,
+                        value: modalInput,
+                      }),
+                      headers: {
+                        "Content-Type": "application/json",
+                      },
+                      method: "POST",
+                    }).then(() => {
+                      router.replace(router.asPath);
+                    });
+                  }
+
+                  setOpenedModalId(null);
+                }}
                 width="100%"
                 margin="20px 0px 0px 0px"
               />
