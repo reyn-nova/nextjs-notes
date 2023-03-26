@@ -6,26 +6,29 @@ import IconButton from "@/components/icon_button";
 import ListItem from "@/components/list_item";
 import { prisma } from "@/lib/prisma";
 
-export async function getStaticProps() {
-  const projects = await prisma.project.findMany();
+export const getServerSideProps = async (context: any) => {
+  const project = await prisma.project.findUnique({
+    where: {
+      id: Number(context.params.project_id),
+    },
+    include: {
+      notes: true,
+    },
+  });
 
   return {
-    props: { projects },
+    props: { notes: project?.notes },
   };
-}
+};
 
-type ProjectsPageType = {
-  projects: {
+type NotesPageType = {
+  notes: {
     id: number;
-    name: string;
-    note: {
-      id: number;
-      value?: string;
-    }[];
+    value: string;
   }[];
 };
 
-const ProjectsPage = ({ projects }: ProjectsPageType) => {
+const NotesPage = ({ notes }: NotesPageType) => {
   const [modalInput, setModalInput] = useState("");
 
   // null for not showing modal
@@ -59,7 +62,7 @@ const ProjectsPage = ({ projects }: ProjectsPageType) => {
             width: 320,
           }}
         >
-          <h1>Projects</h1>
+          <h1>Note</h1>
 
           <IconButton
             variant="add"
@@ -71,18 +74,17 @@ const ProjectsPage = ({ projects }: ProjectsPageType) => {
           />
         </div>
 
-        {projects
+        {notes
           .sort((a, b) => a.id - b.id)
-          .map(({ id, name }) => {
+          .map(({ id, value }) => {
             return (
               <ListItem
                 key={id}
-                onClick={() => router.push(`/projects/${id}`)}
                 onEdit={() => {
-                  setModalInput(name);
+                  setModalInput(value);
                   setOpenedModalId(id);
                 }}
-                value={name}
+                value={value}
               ></ListItem>
             );
           })}
@@ -116,7 +118,7 @@ const ProjectsPage = ({ projects }: ProjectsPageType) => {
                   justifyContent: "space-between",
                 }}
               >
-                <h1>{openedModalId === -1 ? "Add" : "Edit"} Project</h1>
+                <h1>{openedModalId === -1 ? "Add" : "Edit"} Note</h1>
 
                 <div
                   style={{
@@ -129,7 +131,7 @@ const ProjectsPage = ({ projects }: ProjectsPageType) => {
                       backgroundColor="red"
                       margin="0px 10px 0px 0px"
                       onClick={async () => {
-                        await fetch("api/project", {
+                        await fetch("../api/note", {
                           body: JSON.stringify({
                             id: openedModalId,
                           }),
@@ -155,7 +157,7 @@ const ProjectsPage = ({ projects }: ProjectsPageType) => {
 
               <input
                 value={modalInput}
-                placeholder="Type your project name..."
+                placeholder="Type your note..."
                 onChange={(event) => setModalInput(event.target.value)}
                 style={{
                   color: "black",
@@ -172,22 +174,25 @@ const ProjectsPage = ({ projects }: ProjectsPageType) => {
                 backgroundColor="green"
                 onClick={async () => {
                   if (openedModalId === -1) {
-                    await fetch("api/project", {
+                    await fetch("../api/note", {
                       body: JSON.stringify({
-                        name: modalInput,
+                        projectId: Number(router.query.project_id),
+                        value: modalInput,
                       }),
                       headers: {
                         "Content-Type": "application/json",
                       },
                       method: "POST",
-                    }).then(() => {
-                      router.replace(router.asPath);
-                    });
+                    })
+                      .then(() => {
+                        router.replace(router.asPath);
+                      })
+                      .then((err) => console.log(err));
                   } else {
-                    await fetch("api/project", {
+                    await fetch("../api/note", {
                       body: JSON.stringify({
                         id: openedModalId,
-                        name: modalInput,
+                        value: modalInput,
                       }),
                       headers: {
                         "Content-Type": "application/json",
@@ -211,4 +216,4 @@ const ProjectsPage = ({ projects }: ProjectsPageType) => {
   );
 };
 
-export default ProjectsPage;
+export default NotesPage;
